@@ -1,0 +1,15 @@
+version: 0.1
+project:
+  name: "RE4F"
+  summary: "越肩第三人稱粉絲試作，手機與電腦都從 GitHub Pages 進入。"
+cairn:
+  knowledge_dir: "cairn"
+  skill_spec_date: "2026-07-16"
+  git_policy: "track"
+  language: "zh"
+graduation:
+  provider: "obsidian"
+  target: "F:\\knowledge"
+  index: "F:\\knowledge\\INDEX.md"
+history:
+  migration_mode: "start_fresh"
