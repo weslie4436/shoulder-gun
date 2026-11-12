@@ -7,13 +7,18 @@
       content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no"
     />
     <title>越肩靶場</title>
+    <link rel="apple-touch-icon" href="./icon-180.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="越肩" />
+    <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=Share+Tech+Mono&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./app.css?v=31" />
+    <link rel="stylesheet" href="./app.css?v=33" />
     <script type="importmap">
       {
         "imports": {
@@ -56,14 +61,16 @@
       <li><kbd>W A S D</kbd> 走</li>
       <li><kbd>Shift</kbd> 跑</li>
       <li><kbd>C</kbd> 蹲，蹲著也能走、瞄準、開槍</li>
-      <li><kbd>滑鼠右鍵</kbd> 持槍瞄準</li>
-      <li><kbd>滑鼠左鍵</kbd> 射擊</li>
+      <li><kbd>滑鼠右鍵</kbd> 按住瞄準</li>
+      <li><kbd>滑鼠左鍵</kbd> 射擊或揮刀</li>
+      <li><kbd>V</kbd> 小刀</li>
+      <li><kbd>E</kbd> 爬梯、踢梯、翻越</li>
       <li><kbd>R</kbd> 裝彈</li>
     </ul>
 
     <div id="gate">
       <p>點一下進入靶場</p>
-      <small>電腦會鎖定滑鼠。手機用左下搖桿移動，拖畫面轉向。</small>
+      <small>電腦按住右鍵瞄準。手機點一下瞄準，再拖畫面移動準心。</small>
     </div>
 
     <div id="touch" hidden>
@@ -72,11 +79,14 @@
         <button type="button" id="btn-aim">瞄準</button>
         <button type="button" id="btn-fire">射擊</button>
         <button type="button" id="btn-crouch">蹲</button>
+        <button type="button" id="btn-knife">刀</button>
         <button type="button" id="btn-sprint">跑</button>
         <button type="button" id="btn-reload">裝彈</button>
       </div>
+      <button type="button" id="btn-use" hidden>互動</button>
     </div>
+    <p id="prompt" hidden></p>
 
-    <script type="module" src="./main.js?v=31"></script>
+    <script type="module" src="./main.js?v=33"></script>
   </body>
 </html>

@@ -219,7 +219,7 @@ body.is-locked #gate {
   top: 0;
   bottom: var(--kb, 0px);
   z-index: 6;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 #touch[hidden] {
@@ -309,13 +309,57 @@ body.is-locked #gate {
 
 #pad button#btn-fire {
   grid-column: 2;
-  grid-row: 1 / span 2;
-  height: calc(var(--btn) * 2 + 10px);
-  min-height: calc(var(--btn) * 2 + 10px);
-  max-height: calc(var(--btn) * 2 + 10px);
-  border-radius: calc(var(--btn) / 2);
-  line-height: calc(var(--btn) * 2 + 10px);
+  grid-row: 1;
   background: rgba(154, 43, 43, 0.78);
+}
+
+#btn-knife {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+#btn-use {
+  position: absolute;
+  left: 50%;
+  bottom: calc(210px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  min-width: 108px;
+  height: 52px;
+  margin: 0;
+  padding: 0 16px;
+  border: 2px solid var(--brass);
+  border-radius: 26px;
+  background: rgba(12, 9, 6, 0.72);
+  color: var(--paper);
+  font-family: Oswald, sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+#btn-use[hidden] {
+  display: none;
+}
+
+#prompt {
+  position: fixed;
+  left: 50%;
+  bottom: calc(28vh);
+  z-index: 7;
+  margin: 0;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  background: rgba(12, 9, 6, 0.72);
+  border: 1px solid var(--brass);
+  color: var(--plaster);
+  font-family: Oswald, sans-serif;
+  font-size: 22px;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+}
+
+#prompt[hidden] {
+  display: none;
 }
 
 #btn-reload {

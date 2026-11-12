@@ -18,6 +18,7 @@ const ammoEl = document.getElementById("ammo");
 const hitsEl = document.getElementById("hits");
 const sightEl = document.getElementById("sight");
 const touchRoot = document.getElementById("touch");
+const promptEl = document.getElementById("prompt");
 const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
 const canLock = "requestPointerLock" in Element.prototype;
 let usingTouch = coarsePointer || !canLock;
@@ -60,6 +61,24 @@ let gunBuffer = null;
 let stepCarry = 0;
 let shotUntil = 0;
 let reloadUntil = 0;
+let knifeMode = false;
+let slashUntil = 0;
+let busyUntil = 0;
+let motion = null;
+let ladderUp = true;
+let ladderAnim = null;
+let pendingAct = null;
+let blade = null;
+let ladderMesh = null;
+let slashMark = null;
+const solids = [];
+const vaultMeshes = [];
+const VAULT_H = 1;
+const LOFT_Y = 2.8;
+const SLASH_ARC = (120 * Math.PI) / 180;
+const SLASH_REACH = 1.65;
+const loftBox = { minX: -11.3, maxX: -7.1, minZ: 2.15, maxZ: 5.15 };
+const ladderAnchor = new THREE.Vector3(-9.2, 0, 5.9);
 let soleY = null;
 let aimTwist = 0;
 let smoothEye = 1.6;
@@ -145,6 +164,9 @@ async function boot() {
     aimUpper: act(partClip(byName("Pistol_Aim_Neutral"), false, "AimUpper"), true),
     shootUpper: act(partClip(byName("Pistol_Shoot"), false, "ShootUpper"), false),
     reloadUpper: act(partClip(byName("Pistol_Reload"), false, "ReloadUpper"), false),
+    idleLower: act(partClip(byName("Idle_Loop"), true, "IdleLower"), true),
+    swordIdle: act(partClip(byName("Sword_Idle"), false, "SwordIdle"), true),
+    swordAtk: act(partClip(byName("Sword_Attack"), false, "SwordAtk"), false),
   };
   mixer.addEventListener("finished", (e) => {
     if (e.action === actions.reload || e.action === actions.reloadUpper) {
@@ -164,6 +186,13 @@ async function boot() {
   actions.idle.reset().setEffectiveWeight(1).play();
   playing.add("idle");
   if (hand) seatPistol();
+  blade = makeKnife();
+  if (hand) hand.add(blade);
+  else player.add(blade);
+  if (hand) seatInHand(blade, actions.swordIdle);
+  blade.visible = false;
+  actions.idle.reset().setEffectiveWeight(1).play();
+  playing.add("idle");
   mixer.update(0);
   model.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(model);
@@ -323,6 +352,128 @@ function range() {
   );
   rail.position.set(0, 3.4, 0.2);
   scene.add(rail);
+  buildCourse();
+}
+
+function buildCourse() {
+  const wood = new THREE.MeshStandardMaterial({ color: 0x6b4a2c, roughness: 0.88 });
+  const plaster = new THREE.MeshStandardMaterial({ color: 0x8a7a62, roughness: 0.9 });
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.16, 3), wood);
+  deck.position.set(-9.2, LOFT_Y, 3.65);
+  deck.receiveShadow = true;
+  deck.castShadow = true;
+  scene.add(deck);
+
+  const loftWall = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.3, 0.16), plaster);
+  loftWall.position.set(-9.2, LOFT_Y + 0.73, 2.22);
+  scene.add(loftWall);
+
+  ladderMesh = makeLadder(2.95);
+  ladderMesh.position.copy(ladderAnchor);
+  ladderMesh.rotation.x = 0.28;
+  scene.add(ladderMesh);
+
+  addSolid(boxSolid(1.2, 5.4, 0.86, 1.14, 0, VAULT_H), plaster, true);
+  const windowX = 8.35;
+  addSolid(boxSolid(windowX - 0.14, windowX + 0.14, -2.2, -0.55, 0, 2.5), plaster, false);
+  addSolid(boxSolid(windowX - 0.14, windowX + 0.14, 0.55, 2.4, 0, 2.5), plaster, false);
+  addSolid(boxSolid(windowX - 0.14, windowX + 0.14, -0.55, 0.55, 0, VAULT_H), plaster, true);
+  addSolid(boxSolid(windowX - 0.14, windowX + 0.14, -0.55, 0.55, VAULT_H + 0.9, 2.5), plaster, false);
+
+  const dummy = new THREE.Mesh(
+    new THREE.BoxGeometry(0.7, 1.3, 0.4),
+    new THREE.MeshStandardMaterial({ color: 0x8a6a3b, roughness: 0.8 })
+  );
+  dummy.position.set(1.4, 0.65, 6.4);
+  dummy.castShadow = true;
+  dummy.userData.hp = 3;
+  scene.add(dummy);
+  targets.push(dummy);
+
+  slashMark = new THREE.Mesh(
+    new THREE.BoxGeometry(1.55, 0.06, 0.06),
+    new THREE.MeshBasicMaterial({ color: 0xf4f1e8, transparent: true, opacity: 0 })
+  );
+  scene.add(slashMark);
+}
+
+function boxSolid(minX, maxX, minZ, maxZ, y0, y1) {
+  return { minX, maxX, minZ, maxZ, y0, y1 };
+}
+
+function addSolid(box, material, vault) {
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(box.maxX - box.minX, box.y1 - box.y0, box.maxZ - box.minZ),
+    material
+  );
+  mesh.position.set((box.minX + box.maxX) / 2, (box.y0 + box.y1) / 2, (box.minZ + box.maxZ) / 2);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.userData.vault = vault;
+  scene.add(mesh);
+  solids.push(box);
+  if (vault) vaultMeshes.push(mesh);
+}
+
+function makeLadder(height) {
+  const group = new THREE.Group();
+  const wood = new THREE.MeshStandardMaterial({ color: 0x6a4424, roughness: 0.86 });
+  const rail = new THREE.BoxGeometry(0.06, height, 0.045);
+  const left = new THREE.Mesh(rail, wood);
+  left.position.set(-0.22, height / 2, 0);
+  const right = new THREE.Mesh(rail, wood);
+  right.position.set(0.22, height / 2, 0);
+  group.add(left, right);
+  const rungGeo = new THREE.BoxGeometry(0.5, 0.035, 0.04);
+  const steps = Math.max(6, Math.round(height / 0.28));
+  for (let i = 0; i < steps; i += 1) {
+    const rung = new THREE.Mesh(rungGeo, wood);
+    rung.position.set(0, 0.18 + (i * (height - 0.28)) / steps, 0);
+    group.add(rung);
+  }
+  return group;
+}
+
+function makeKnife() {
+  const knife = new THREE.Group();
+  const handle = new THREE.Mesh(
+    new THREE.BoxGeometry(0.014, 0.09, 0.02),
+    new THREE.MeshStandardMaterial({ color: 0x3a2414, roughness: 0.72 })
+  );
+  handle.position.y = 0.02;
+  const steel = new THREE.Mesh(
+    new THREE.BoxGeometry(0.016, 0.16, 0.004),
+    new THREE.MeshStandardMaterial({ color: 0xd7dbe0, metalness: 0.62, roughness: 0.28 })
+  );
+  steel.position.y = 0.145;
+  knife.add(handle, steel);
+  knife.visible = false;
+  return knife;
+}
+
+function seatInHand(obj, pose) {
+  for (const name of [...playing]) {
+    actions[name].stop();
+    playing.delete(name);
+  }
+  pose.reset().setEffectiveWeight(1).play();
+  mixer.update(0.35);
+  model.updateMatrixWorld(true);
+  const handPos = new THREE.Vector3();
+  const forearmPos = new THREE.Vector3();
+  hand.getWorldPosition(handPos);
+  model.getObjectByName("DEF-forearmR").getWorldPosition(forearmPos);
+  const barrel = handPos.clone().sub(forearmPos).normalize();
+  const down = new THREE.Vector3(0, -1, 0);
+  const grip = down.clone().addScaledVector(barrel, -down.dot(barrel)).normalize();
+  const side = new THREE.Vector3().crossVectors(barrel, grip).normalize();
+  const basis = new THREE.Matrix4().makeBasis(side, barrel, grip);
+  const worldQ = new THREE.Quaternion().setFromRotationMatrix(basis);
+  const parentQ = hand.getWorldQuaternion(new THREE.Quaternion());
+  obj.quaternion.copy(parentQ.invert()).multiply(worldQ);
+  const seat = handPos.clone().addScaledVector(barrel, 0.02).addScaledVector(grip, -0.004);
+  obj.position.copy(hand.worldToLocal(seat));
+  pose.stop();
 }
 
 async function loadPistol() {
@@ -480,7 +631,10 @@ function bindInput() {
   });
   addEventListener("keydown", (e) => {
     keys.add(e.code);
+    if (e.repeat) return;
     if (e.code === "KeyR") startReload();
+    if (e.code === "KeyV") toggleKnife();
+    if (e.code === "KeyE") doPrompt();
   });
   addEventListener("keyup", (e) => keys.delete(e.code));
   addEventListener("mousedown", (e) => {
@@ -528,7 +682,6 @@ function clampPitch() {
 }
 
 function bindTouch() {
-  const canvas = renderer.domElement;
   const stick = document.getElementById("stick");
   const knob = stick.querySelector("i");
   const stickKeys = new Set();
@@ -538,29 +691,41 @@ function bindTouch() {
   let stickId = null;
   let stickOrigin = { x: 0, y: 0 };
 
-  canvas.addEventListener("pointerdown", (e) => {
-    if (!usingTouch || lookControls.isLocked || e.pointerType === "mouse") return;
-    if (!document.body.classList.contains("is-locked")) return;
+  let aimTap = null;
+  touchRoot.addEventListener("pointerdown", (e) => {
+    if (!usingTouch || !document.body.classList.contains("is-locked")) return;
+    if (e.target.closest("#stick")) return;
+    const btn = e.target.closest("button");
+    if (btn && btn.id !== "btn-aim") return;
     lookId = e.pointerId;
     lookX = e.clientX;
     lookY = e.clientY;
-    canvas.setPointerCapture(e.pointerId);
+    aimTap = btn ? { x: e.clientX, y: e.clientY, dragged: false } : null;
+    touchRoot.setPointerCapture(e.pointerId);
   });
-  canvas.addEventListener("pointermove", (e) => {
+  touchRoot.addEventListener("pointermove", (e) => {
     if (e.pointerId !== lookId) return;
     const dx = e.clientX - lookX;
     const dy = e.clientY - lookY;
+    if (aimTap && Math.hypot(e.clientX - aimTap.x, e.clientY - aimTap.y) > 12) {
+      aimTap.dragged = true;
+      if (!mouse.aim) setAim(true);
+    }
+    if (aimTap && !aimTap.dragged) return;
     lookX = e.clientX;
     lookY = e.clientY;
-    yaw -= dx * 0.005;
+    yaw -= dx * 0.0055;
     pitch -= dy * 0.005;
     clampPitch();
   });
   const endLook = (e) => {
-    if (e.pointerId === lookId) lookId = null;
+    if (e.pointerId !== lookId) return;
+    if (aimTap && !aimTap.dragged) setAim(!mouse.aim);
+    lookId = null;
+    aimTap = null;
   };
-  canvas.addEventListener("pointerup", endLook);
-  canvas.addEventListener("pointercancel", endLook);
+  touchRoot.addEventListener("pointerup", endLook);
+  touchRoot.addEventListener("pointercancel", endLook);
 
   function applyStick(x, y) {
     const max = 42;
@@ -598,22 +763,32 @@ function bindTouch() {
   stick.addEventListener("pointerup", endStick);
   stick.addEventListener("pointercancel", endStick);
 
-  holdPad(document.getElementById("btn-aim"), () => {
-    mouse.aim = true;
-    syncAimChrome();
-  }, () => {
-    mouse.aim = false;
-    syncAimChrome();
-  });
   holdPad(document.getElementById("btn-fire"), () => {
     mouse.fire = true;
   }, () => {
     mouse.fire = false;
   });
-  holdPad(document.getElementById("btn-sprint"), () => {
-    keys.add("ShiftLeft");
-  }, () => {
-    keys.delete("ShiftLeft");
+  const sprintBtn = document.getElementById("btn-sprint");
+  sprintBtn.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (keys.has("ShiftLeft")) {
+      keys.delete("ShiftLeft");
+      sprintBtn.classList.remove("is-on");
+    } else {
+      keys.add("ShiftLeft");
+      sprintBtn.classList.add("is-on");
+    }
+  });
+  document.getElementById("btn-knife").addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleKnife();
+  });
+  document.getElementById("btn-use").addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    doPrompt();
   });
   const crouchBtn = document.getElementById("btn-crouch");
   crouchBtn.addEventListener("pointerdown", (e) => {
@@ -650,9 +825,16 @@ function holdPad(button, down, up) {
   button.addEventListener("pointercancel", end);
 }
 
+function setAim(on) {
+  mouse.aim = on;
+  syncAimChrome();
+}
+
 function syncAimChrome() {
   document.body.classList.toggle("is-aiming", mouse.aim);
   sightEl.hidden = !mouse.aim;
+  const aimBtn = document.getElementById("btn-aim");
+  if (aimBtn) aimBtn.classList.toggle("is-on", mouse.aim);
 }
 
 function movingNow() {
@@ -660,7 +842,7 @@ function movingNow() {
 }
 
 function startReload() {
-  if (reloading || ammo === MAG) return;
+  if (knifeMode || reloading || ammo === MAG) return;
   reloading = true;
   const layered = mouse.aim || keys.has("KeyC") || movingNow();
   const name = layered ? "reloadUpper" : "reload";
@@ -676,6 +858,8 @@ function tick() {
   if (keys.has("KeyS")) wish.z += 1;
   if (keys.has("KeyA")) wish.x -= 1;
   if (keys.has("KeyD")) wish.x += 1;
+  const busy = performance.now() < busyUntil || motion;
+  if (busy) wish.set(0, 0, 0);
   const moving = wish.lengthSq() > 0;
   if (moving) wish.normalize();
 
@@ -690,9 +874,19 @@ function tick() {
   else if (mouse.aim) speed = AIM_WALK;
   else if (crouch) speed = CROUCH;
   else if (sprint && moving) speed = RUN;
-  player.position.addScaledVector(move, speed * dt);
-  player.position.x = THREE.MathUtils.clamp(player.position.x, -12, 12);
-  player.position.z = THREE.MathUtils.clamp(player.position.z, -12, 12);
+  if (!motion) {
+    player.position.addScaledVector(move, speed * dt);
+    keepOut(player.position);
+    player.position.x = THREE.MathUtils.clamp(player.position.x, -12, 12);
+    player.position.z = THREE.MathUtils.clamp(player.position.z, -12, 12);
+    const floor = standHeight(player.position.x, player.position.z, player.position.y);
+    const drop = player.position.y - floor;
+    if (drop > 0.04) player.position.y = Math.max(floor, player.position.y - 9 * dt);
+    else player.position.y = floor;
+  } else {
+    stepMotion(dt);
+  }
+  stepLadder(dt);
 
   const aimingNow = mouse.aim || performance.now() < shotUntil;
   const faceDir = moving && !aimingNow ? move : forward;
@@ -707,13 +901,19 @@ function tick() {
   }
 
   if (reloading && performance.now() >= reloadUntil) finishReload();
-  if (mouse.fire) tryShoot();
+  if (mouse.fire && !busy) {
+    if (knifeMode) trySlash();
+    else tryShoot();
+  }
+  refreshPrompt();
   chooseClip(moving, crouch, sprint, speed);
-  if (rifle) rifle.visible = mouse.aim || reloading || performance.now() < shotUntil;
+  if (rifle) rifle.visible = !knifeMode && (mouse.aim || reloading || performance.now() < shotUntil);
+  if (blade) blade.visible = knifeMode;
+  if (slashMark) slashMark.material.opacity = Math.max(0, slashMark.material.opacity - dt * 3.2);
   footsteps(moving, crouch, sprint, speed, dt);
   mixer.update(dt);
   applyAimLook();
-  plantFeet(dt);
+  if (player.position.y < 0.2 && !motion) plantFeet(dt);
   model.updateMatrixWorld(true);
   cameraFollow(dt, moving);
   cool = Math.max(0, cool - dt);
@@ -724,10 +924,28 @@ function tick() {
 
 function chooseClip(moving, crouch, sprint, speed) {
   const shooting = performance.now() < shotUntil;
+  const slashing = performance.now() < slashUntil;
   const aiming = mouse.aim || shooting;
   let names = ["idle"];
   let label = "待機";
-  if (aiming || (reloading && (crouch || moving))) {
+  if (knifeMode && !reloading) {
+    let lower = "idleLower";
+    if (crouch) lower = moving ? "sneakLower" : "crouchLower";
+    else if (moving && sprint && !mouse.aim) lower = "runLower";
+    else if (moving) lower = "walkLower";
+    else if (mouse.aim) lower = "aimLower";
+    names = [lower, slashing ? "swordAtk" : "swordIdle"];
+    if (slashing) label = "揮刀";
+    else if (mouse.aim) label = "持刀瞄準";
+    else label = moving ? (crouch ? "蹲走持刀" : "持刀") : "持刀";
+    const stride = lower === "sneakLower" ? 0.75 : lower === "runLower" ? 1.45 : 1.05;
+    const loco = actions[lower];
+    if (moving && (lower === "walkLower" || lower === "sneakLower" || lower === "runLower")) {
+      loco.timeScale = loco.getClip().duration / ((2 * stride) / Math.max(speed, 0.25));
+    } else {
+      loco.timeScale = 1;
+    }
+  } else if (aiming || (reloading && (crouch || moving))) {
     let lower = "aimLower";
     if (crouch) lower = moving ? "sneakLower" : "crouchLower";
     else if (moving && sprint && !mouse.aim && !shooting) lower = "runLower";
@@ -811,7 +1029,7 @@ function cameraFollow(dt, moving) {
 }
 
 function tryShoot() {
-  if (!mouse.aim || reloading || cool > 0) return;
+  if (knifeMode || !mouse.aim || reloading || cool > 0 || performance.now() < busyUntil) return;
   if (ammo <= 0) {
     startReload();
     return;
@@ -834,15 +1052,7 @@ function tryShoot() {
   if (hitscan.length) {
     const hit = hitscan[0];
     end.copy(hit.point);
-    hit.object.userData.hp -= 1;
-    hit.object.material = hit.object.material.clone();
-    hit.object.material.color.setHex(hit.object.userData.hp <= 0 ? 0x4a2018 : 0xb5522a);
-    if (hit.object.userData.hp <= 0) {
-      hit.object.scale.y = 0.2;
-      hit.object.position.y = 0.12;
-    }
-    hits += 1;
-    hitsEl.textContent = String(hits);
+    hurtTarget(hit.object);
   }
   const pos = tracer.geometry.attributes.position;
   pos.setXYZ(0, muzzleWorld.x, muzzleWorld.y, muzzleWorld.z);
@@ -961,7 +1171,7 @@ function finishReload() {
 function applyAimLook() {
   if (!mouse.aim && performance.now() >= shotUntil) return;
   const chest = model.getObjectByName("DEF-spine003");
-  const track = chestTrack(actions.aimUpper);
+  const track = chestTrack(knifeMode ? actions.swordIdle : actions.aimUpper);
   if (!chest || !track) return;
   sampleTrackQuat(track, 0, chest.quaternion);
   const aimAngle = Math.atan2(pitch * 5.5 - 0.06, 11.15);
@@ -1005,6 +1215,182 @@ function tiltBone(bone, deltaWorld) {
   aimParentQ.copy(aimWorldQ).invert();
   aimParentQ.multiply(deltaWorld).multiply(aimWorldQ);
   bone.quaternion.multiply(aimParentQ);
+}
+
+function toggleKnife() {
+  if (reloading || performance.now() < busyUntil) return;
+  knifeMode = !knifeMode;
+  const btn = document.getElementById("btn-knife");
+  if (btn) btn.classList.toggle("is-on", knifeMode);
+  if (rifle) rifle.visible = !knifeMode && (mouse.aim || reloading || performance.now() < shotUntil);
+  if (blade) blade.visible = knifeMode;
+}
+
+function trySlash() {
+  if (cool > 0 || performance.now() < busyUntil) return;
+  cool = 0.5;
+  slashUntil = performance.now() + 520;
+  kick("swordAtk");
+  if (slashMark) {
+    slashMark.position.copy(player.position).addScaledVector(forward, 0.85);
+    slashMark.position.y += 1.15;
+    slashMark.rotation.y = yaw;
+    slashMark.material.opacity = 0.85;
+  }
+  const origin = player.position.clone();
+  origin.y += 1.15;
+  for (const target of targets) {
+    const to = target.position.clone().sub(origin);
+    to.y = 0;
+    const dist = to.length();
+    if (dist > SLASH_REACH || dist < 0.05) continue;
+    const angle = Math.acos(THREE.MathUtils.clamp(forward.dot(to.normalize()), -1, 1));
+    if (angle <= SLASH_ARC / 2) hurtTarget(target);
+  }
+}
+
+function hurtTarget(object) {
+  if (!object.userData || object.userData.hp == null || object.userData.hp <= 0) return;
+  object.userData.hp -= 1;
+  object.material = object.material.clone();
+  object.material.color.setHex(object.userData.hp <= 0 ? 0x4a2018 : 0xb5522a);
+  if (object.userData.hp <= 0) {
+    object.scale.y = 0.2;
+    object.position.y = 0.12;
+  }
+  hits += 1;
+  hitsEl.textContent = String(hits);
+}
+
+function insideLoft(x, z) {
+  return x > loftBox.minX && x < loftBox.maxX && z > loftBox.minZ && z < loftBox.maxZ;
+}
+
+function standHeight(x, z, y) {
+  if (insideLoft(x, z) && y > 1.5) return LOFT_Y;
+  return 0;
+}
+
+function keepOut(pos) {
+  for (let pass = 0; pass < 4; pass += 1) {
+    let blocked = false;
+    for (const box of solids) {
+      const head = pos.y + 1.65;
+      if (head < box.y0 + 0.05 || pos.y > box.y1 - 0.25) continue;
+      if (pos.x <= box.minX || pos.x >= box.maxX || pos.z <= box.minZ || pos.z >= box.maxZ) continue;
+      blocked = true;
+      const left = pos.x - box.minX;
+      const right = box.maxX - pos.x;
+      const south = pos.z - box.minZ;
+      const north = box.maxZ - pos.z;
+      if (Math.min(left, right) < Math.min(south, north)) pos.x += left < right ? -left - 0.05 : right + 0.05;
+      else pos.z += south < north ? -south - 0.05 : north + 0.05;
+    }
+    if (!blocked) break;
+  }
+}
+
+function startMotion(to, dur, arc) {
+  motion = { from: player.position.clone(), to, t: 0, dur, arc };
+  busyUntil = performance.now() + dur * 1000 + 40;
+}
+
+function stepMotion(dt) {
+  motion.t += dt;
+  const u = Math.min(1, motion.t / motion.dur);
+  const k = u * u * (3 - 2 * u);
+  player.position.lerpVectors(motion.from, motion.to, k);
+  if (motion.arc) player.position.y += Math.sin(Math.PI * u) * motion.arc;
+  if (u >= 1) {
+    player.position.copy(motion.to);
+    motion = null;
+  }
+}
+
+function stepLadder(dt) {
+  if (!ladderAnim || !ladderMesh) return;
+  ladderAnim.t += dt;
+  const u = Math.min(1, ladderAnim.t / ladderAnim.dur);
+  ladderMesh.rotation.x = ladderAnim.from + (ladderAnim.to - ladderAnim.from) * u;
+  if (u >= 1) {
+    ladderUp = ladderAnim.up;
+    ladderAnim = null;
+  }
+}
+
+function climbUp() {
+  if (!ladderUp) return;
+  startMotion(new THREE.Vector3(ladderAnchor.x, LOFT_Y, 4.45), 1.15, 0);
+}
+
+function climbDown() {
+  if (!ladderUp) return;
+  startMotion(new THREE.Vector3(ladderAnchor.x, 0, ladderAnchor.z + 0.9), 1.15, 0);
+}
+
+function kickLadder() {
+  if (!ladderUp || !ladderMesh) return;
+  busyUntil = performance.now() + 480;
+  ladderAnim = { from: ladderMesh.rotation.x, to: -1.15, t: 0, dur: 0.42, up: false };
+}
+
+function raiseLadder() {
+  if (ladderUp || !ladderMesh) return;
+  busyUntil = performance.now() + 480;
+  ladderAnim = { from: ladderMesh.rotation.x, to: 0.28, t: 0, dur: 0.42, up: true };
+}
+
+function vaultAhead() {
+  const dest = player.position.clone().addScaledVector(forward, 1.25);
+  dest.y = 0;
+  startMotion(dest, 0.55, 0.62);
+}
+
+function nearVault() {
+  const origin = player.position.clone();
+  origin.y += 0.72;
+  raycaster.set(origin, forward);
+  const hits = raycaster.intersectObjects(vaultMeshes, false);
+  if (!hits.length || hits[0].distance > 0.95) return null;
+  return hits[0].object;
+}
+
+function currentAction() {
+  if (performance.now() < busyUntil || motion) return null;
+  const spot = player.position;
+  if (Math.hypot(spot.x - ladderAnchor.x, spot.z - (ladderAnchor.z + 0.75)) < 1.2 && spot.y < 1.1) {
+    return ladderUp ? { text: "爬上", run: climbUp } : { text: "架起梯子", run: raiseLadder };
+  }
+  if (
+    insideLoft(spot.x, spot.z) &&
+    spot.y > LOFT_Y - 0.45 &&
+    Math.hypot(spot.x - ladderAnchor.x, spot.z - ladderAnchor.z) < 1.9
+  ) {
+    if (!ladderUp) return null;
+    if (spot.z > 4.7) return { text: "爬下", run: climbDown };
+    return { text: "踢下梯子", run: kickLadder };
+  }
+  if (nearVault()) return { text: "翻越", run: vaultAhead };
+  return null;
+}
+
+function refreshPrompt() {
+  pendingAct = currentAction();
+  const use = document.getElementById("btn-use");
+  if (!pendingAct) {
+    promptEl.hidden = true;
+    if (use) use.hidden = true;
+    return;
+  }
+  promptEl.hidden = false;
+  promptEl.textContent = (usingTouch ? "" : "E  ") + pendingAct.text;
+  if (use) use.hidden = !usingTouch;
+}
+
+function doPrompt() {
+  if (performance.now() < busyUntil || motion) return;
+  if (!pendingAct) pendingAct = currentAction();
+  if (pendingAct) pendingAct.run();
 }
 
 function dampAngle(cur, target, lambda, dt) {
