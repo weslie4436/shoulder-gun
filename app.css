@@ -12,6 +12,11 @@
   box-sizing: border-box;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 html,
 body,
 #stage {
@@ -209,7 +214,10 @@ body.is-locked #gate {
 
 #touch {
   position: fixed;
-  inset: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: var(--kb, 0px);
   z-index: 6;
   pointer-events: none;
 }
@@ -229,8 +237,10 @@ body.is-locked #gate {
   position: absolute;
   left: calc(18px + env(safe-area-inset-left));
   bottom: calc(18px + env(safe-area-inset-bottom));
-  width: 120px;
-  height: 120px;
+  width: 132px;
+  height: 132px;
+  min-width: 132px;
+  min-height: 132px;
   border-radius: 50%;
   border: 2px solid rgba(201, 162, 39, 0.75);
   background: rgba(12, 9, 6, 0.45);
@@ -248,18 +258,26 @@ body.is-locked #gate {
 }
 
 #pad {
+  --btn: 76px;
   position: absolute;
   right: calc(16px + env(safe-area-inset-right));
   bottom: calc(18px + env(safe-area-inset-bottom));
   display: grid;
-  grid-template-columns: 68px 68px;
-  grid-template-rows: 68px 68px 68px;
-  gap: 8px;
+  grid-template-columns: var(--btn) var(--btn);
+  grid-template-rows: var(--btn) var(--btn) var(--btn);
+  gap: 10px;
 }
 
 #pad button {
   appearance: none;
   -webkit-appearance: none;
+  box-sizing: border-box;
+  width: var(--btn);
+  height: var(--btn);
+  min-width: var(--btn);
+  min-height: var(--btn);
+  max-width: var(--btn);
+  max-height: var(--btn);
   margin: 0;
   padding: 0;
   border: 2px solid var(--brass);
@@ -269,7 +287,9 @@ body.is-locked #gate {
   font-family: Oswald, sans-serif;
   font-size: 16px;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0;
+  line-height: var(--btn);
+  text-align: center;
 }
 
 #btn-aim {
@@ -287,11 +307,14 @@ body.is-locked #gate {
   grid-row: 3;
 }
 
-#btn-fire {
+#pad button#btn-fire {
   grid-column: 2;
   grid-row: 1 / span 2;
-  height: auto;
-  border-radius: 34px;
+  height: calc(var(--btn) * 2 + 10px);
+  min-height: calc(var(--btn) * 2 + 10px);
+  max-height: calc(var(--btn) * 2 + 10px);
+  border-radius: calc(var(--btn) / 2);
+  line-height: calc(var(--btn) * 2 + 10px);
   background: rgba(154, 43, 43, 0.78);
 }
 
@@ -321,5 +344,22 @@ body.is-locked #gate {
   }
   #gate p {
     font-size: 36px;
+  }
+}
+
+@media (max-height: 430px) {
+  #pad {
+    --btn: 58px;
+  }
+  #stick {
+    width: 104px;
+    height: 104px;
+    min-width: 104px;
+    min-height: 104px;
+  }
+  #stick i {
+    width: 42px;
+    height: 42px;
+    margin: -21px 0 0 -21px;
   }
 }

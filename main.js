@@ -437,6 +437,8 @@ function fitScreen() {
   const view = window.visualViewport;
   const width = view ? view.width : innerWidth;
   const height = view ? view.height : innerHeight;
+  const kb = view ? Math.max(0, innerHeight - view.height) : 0;
+  document.documentElement.style.setProperty("--kb", kb + "px");
   camera.aspect = width / Math.max(height, 1);
   camera.updateProjectionMatrix();
   renderer.setSize(width, height);
@@ -510,6 +512,7 @@ function bindInput() {
   bindTouch();
   addEventListener("resize", fitScreen);
   if (window.visualViewport) visualViewport.addEventListener("resize", fitScreen);
+  fitScreen();
   renderer.domElement.addEventListener("webglcontextlost", (e) => {
     e.preventDefault();
     document.body.classList.remove("is-locked");
