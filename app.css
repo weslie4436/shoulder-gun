@@ -1,0 +1,325 @@
+:root {
+  --stone: #1a1612;
+  --plaster: #e4d3b4;
+  --brass: #c9a227;
+  --blood: #9a2b2b;
+  --iron: #6d7880;
+  --paper: #f3ead6;
+  --shade: rgba(12, 9, 6, 0.72);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#stage {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--stone);
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
+body {
+  font-family: "Share Tech Mono", ui-monospace, monospace;
+  color: var(--paper);
+  cursor: crosshair;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#letterbox {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.28s ease;
+}
+
+body.is-aiming #letterbox {
+  opacity: 1;
+}
+
+#letterbox i {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 7vh;
+  background: #070504;
+}
+
+#letterbox i:first-child {
+  top: 0;
+}
+
+#letterbox i:last-child {
+  bottom: 0;
+}
+
+#sight {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+}
+
+#sight .bracket {
+  position: absolute;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--brass);
+}
+
+#sight .bracket.l {
+  left: calc(50% - 38px);
+  border-right: 0;
+  border-top: 0;
+  transform: translateY(-2px);
+}
+
+#sight .bracket.r {
+  right: calc(50% - 38px);
+  border-left: 0;
+  border-bottom: 0;
+  transform: translateY(-20px);
+}
+
+#sight b {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin: -2px 0 0 -2px;
+  background: var(--blood);
+  box-shadow: 0 0 8px #ff4d3a;
+  border-radius: 50%;
+}
+
+#hud {
+  position: fixed;
+  left: 28px;
+  bottom: 28px;
+  z-index: 4;
+  min-width: 220px;
+  padding: 18px 20px 16px;
+  background: var(--shade);
+  border-left: 3px solid var(--brass);
+}
+
+.eyebrow {
+  margin: 0 0 4px;
+  color: var(--brass);
+  letter-spacing: 0.28em;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+#stance {
+  margin: 0 0 14px;
+  font-family: Oswald, sans-serif;
+  font-size: 42px;
+  font-weight: 600;
+  line-height: 0.9;
+  letter-spacing: 0.04em;
+}
+
+dl {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  border-top: 1px solid rgba(243, 234, 214, 0.18);
+  padding-top: 8px;
+}
+
+dt {
+  color: var(--iron);
+}
+
+dd {
+  margin: 0;
+  color: var(--plaster);
+}
+
+#keys {
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
+  z-index: 4;
+  margin: 0;
+  padding: 14px 16px;
+  list-style: none;
+  background: var(--shade);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 4.5em;
+  color: var(--brass);
+}
+
+#gate {
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-content: center;
+  gap: 10px;
+  background: rgba(14, 11, 8, 0.82);
+  text-align: center;
+  cursor: pointer;
+}
+
+#gate p {
+  margin: 0;
+  font-family: Oswald, sans-serif;
+  font-size: 48px;
+  letter-spacing: 0.08em;
+}
+
+#gate small {
+  color: var(--plaster);
+}
+
+body.is-locked #gate {
+  display: none;
+}
+
+#touch {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+
+#touch[hidden] {
+  display: none;
+}
+
+#stick,
+#pad,
+#pad button {
+  pointer-events: auto;
+  touch-action: none;
+}
+
+#stick {
+  position: absolute;
+  left: calc(18px + env(safe-area-inset-left));
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 2px solid rgba(201, 162, 39, 0.75);
+  background: rgba(12, 9, 6, 0.45);
+}
+
+#stick i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 48px;
+  height: 48px;
+  margin: -24px 0 0 -24px;
+  border-radius: 50%;
+  background: var(--brass);
+}
+
+#pad {
+  position: absolute;
+  right: calc(16px + env(safe-area-inset-right));
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: 68px 68px;
+  grid-template-rows: 68px 68px 68px;
+  gap: 8px;
+}
+
+#pad button {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 2px solid var(--brass);
+  border-radius: 50%;
+  background: rgba(12, 9, 6, 0.62);
+  color: var(--paper);
+  font-family: Oswald, sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+#btn-aim {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+#btn-crouch {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+#btn-sprint {
+  grid-column: 1;
+  grid-row: 3;
+}
+
+#btn-fire {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  height: auto;
+  border-radius: 34px;
+  background: rgba(154, 43, 43, 0.78);
+}
+
+#btn-reload {
+  grid-column: 2;
+  grid-row: 3;
+}
+
+#pad button.is-on {
+  background: var(--brass);
+  color: var(--stone);
+}
+
+@media (max-width: 720px) {
+  #keys {
+    display: none;
+  }
+  #hud {
+    left: 12px;
+    top: calc(12px + env(safe-area-inset-top));
+    bottom: auto;
+    min-width: 0;
+    padding: 10px 12px;
+  }
+  #stance {
+    font-size: 32px;
+  }
+  #gate p {
+    font-size: 36px;
+  }
+}

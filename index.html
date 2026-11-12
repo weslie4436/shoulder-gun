@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no"
+    />
+    <title>越肩靶場</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=Share+Tech+Mono&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./app.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./vendor/three.module.js",
+          "three/addons/": "./vendor/addons/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="stage"></div>
+
+    <div id="letterbox">
+      <i></i>
+      <i></i>
+    </div>
+
+    <div id="sight" hidden>
+      <span class="bracket l"></span>
+      <span class="bracket r"></span>
+      <b></b>
+    </div>
+
+    <aside id="hud">
+      <p class="eyebrow">靶場試作 · 越肩</p>
+      <h1 id="stance">待機</h1>
+      <dl>
+        <div>
+          <dt>彈藥</dt>
+          <dd id="ammo">15 / 15</dd>
+        </div>
+        <div>
+          <dt>命中</dt>
+          <dd id="hits">0</dd>
+        </div>
+      </dl>
+    </aside>
+
+    <ul id="keys">
+      <li><kbd>W A S D</kbd> 走</li>
+      <li><kbd>Shift</kbd> 跑</li>
+      <li><kbd>C</kbd> 蹲，蹲著也能走、瞄準、開槍</li>
+      <li><kbd>滑鼠右鍵</kbd> 持槍瞄準</li>
+      <li><kbd>滑鼠左鍵</kbd> 射擊</li>
+      <li><kbd>R</kbd> 裝彈</li>
+    </ul>
+
+    <div id="gate">
+      <p>點一下進入靶場</p>
+      <small>電腦會鎖定滑鼠。手機用左下搖桿移動，拖畫面轉向。</small>
+    </div>
+
+    <div id="touch" hidden>
+      <div id="stick"><i></i></div>
+      <div id="pad">
+        <button type="button" id="btn-aim">瞄準</button>
+        <button type="button" id="btn-fire">射擊</button>
+        <button type="button" id="btn-crouch">蹲</button>
+        <button type="button" id="btn-sprint">跑</button>
+        <button type="button" id="btn-reload">裝彈</button>
+      </div>
+    </div>
+
+    <script type="module" src="./main.js?v=29"></script>
+  </body>
+</html>
