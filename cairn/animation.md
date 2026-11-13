@@ -2,23 +2,19 @@
 
 ## 結論
 
-這一版繼續用倉庫裡的 Quaternius《Universal Animation Library》Godot Standard（CC0）。骨骼在載入後會去掉名字裡的點，例如 `DEF-hand.R` 變成 `DEF-handR`。走路、蹲、持槍仍用這包裡的片段。
+人物用 Quaternius 現在這套通用骨架，骨頭名字像 `hand_r`、`spine_03`。兩包的靜止姿勢相同，所以片段直接接在同一個角色上，沒有再換一套軸。
 
-小刀、爬梯、翻越不播大劍，也不換骨架：
+- 第一包 `assets/human/UAL1_Standard.glb`：待機、走路、跑步、蹲、手槍瞄準、開槍、裝彈，以及持刀的 `Sword_Idle`。
+- 第二包 `assets/human/UAL2_Standard.glb`：揮刀用 `Sword_Regular_A`。爬梯和翻越用 `ClimbUp_1m`。
 
-骨骼的長度方向是局部 +Y（子節點的位移）。這是這包檔案裡量出來的，槍、刀、爬梯、翻越都只用這條。
+這兩包都是 CC0，出處是 https://quaternius.com/packs/universalanimationlibrary.html 和 https://quaternius.com/packs/universalanimationlibrary2.html 。
 
-Quaternius 在 Godot 論壇的說明：手臂的彎曲軸要固定，不能讓引擎自己猜。Three.js 討論區也指出，把整段四元數換成「對準世界上方」會把骨頭沿自身扭 180 度。所以這裡只把 +Y 轉到目標，扭轉留著片段原本的。
+`ClimbUp_1m` 是翻上約 1 公尺的動作，不是一階一階的梯子。免費包裡沒有逐階爬梯。梯子仍是一步一步把人抬上去，身上播的是這段現成動作，不再自己擺手腳。
 
-- 槍：Kenney 手槍的槍管是模型的 -Z。放進手上的旋轉是繞 X 轉 180 度，槍管才會跟著手指朝前、握把朝掌心。不再每幀用攝影機的世界上方重算，那個做法會越瞄越歪。
-- 小刀：刀尖也沿著同一條手指軸，插槽收進掌心。瞄準時只把手指轉到前上方。
-- 爬梯和翻越：手腳用同一種擺動。腿不再被翻到後面。
+槍的插槽仍是固定在右手上，不每幀重算。
 
-## 看過但沒換上去的開源
+## 沒有採用的
 
-- Quaternius Universal Animation Library 2（CC0）：有 `ClimbUp_1m`、劍的連段。骨架是 UE5 人體，和現在這包不同。`ClimbUp_1m` 是翻上 1 公尺平台，不是村子那種一階一階的梯子。要換過去得把走路和持槍整套重綁，這次不做。
-- 同作者的公園跑酷片段（翻越、爬上 1 公尺、爬上 2 公尺）也是那套新骨架，出處是 https://quaternius.com/packs/universalanimationlibrary2.html
-
-## 現成技能
-
-沒有另裝新的技能。這個倉庫用得到的是既有的 `project-cairn`、`mydock`（要開視窗時）、以及 Pages 那套 `ios-home-web` 的交付方式。畫面上的虛擬鍵是這個試作自己的，不是家人頁的門面。
+- 舊的 Godot Standard（`DEF-` 骨頭）沒有爬梯、翻越、短砍，所以換掉。
+- Mixamo 有逐階爬梯，授權不准把動作檔放進公開倉庫。
+- 付費的完整版才有翻上 2 公尺和另一段翻越。這次用的是免費的 `ClimbUp_1m`。

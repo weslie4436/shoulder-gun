@@ -9,7 +9,7 @@ const RUN = 5.2;
 const CROUCH = 1.35;
 const AIM_WALK = 1.55;
 const CROUCH_AIM = 1.05;
-const LOWER_BONE = /^DEF-(hips|thigh|shin|foot|toe)/;
+const LOWER_BONE = /^(pelvis|thigh_|calf_|foot_|ball_)/;
 
 const stage = document.getElementById("stage");
 const gate = document.getElementById("gate");
@@ -128,7 +128,8 @@ boot().catch((err) => {
 async function boot() {
   lights();
   range();
-  const manny = await load("./assets/human/AnimationLibrary_Godot_Standard.gltf");
+  const manny = await load("./assets/human/UAL1_Standard.glb");
+  const extra = await load("./assets/human/UAL2_Standard.glb");
   model = manny.scene;
   model.traverse((o) => {
     if (o.isMesh) {
@@ -143,7 +144,7 @@ async function boot() {
   player.add(model);
 
   mixer = new THREE.AnimationMixer(model);
-  const clips = manny.animations.map((c) => cleanClip(c, model));
+  const clips = [...manny.animations, ...extra.animations].map((c) => cleanClip(c, model));
   const byName = (name) => {
     const clip = clips.find((c) => c.name === name);
     if (!clip) throw new Error("缺少動作 " + name);
@@ -168,6 +169,9 @@ async function boot() {
     reloadUpper: act(partClip(byName("Pistol_Reload"), false, "ReloadUpper"), false),
     idleLower: act(partClip(byName("Idle_Loop"), true, "IdleLower"), true),
     idleUpper: act(partClip(byName("Idle_Loop"), false, "IdleUpper"), true),
+    swordUpper: act(partClip(byName("Sword_Idle"), false, "SwordUpper"), true),
+    slashUpper: act(partClip(byName("Sword_Regular_A"), false, "SlashUpper"), false),
+    climb: act(byName("ClimbUp_1m"), true),
   };
   mixer.addEventListener("finished", (e) => {
     if (e.action === actions.reload || e.action === actions.reloadUpper) {
@@ -177,7 +181,7 @@ async function boot() {
     }
   });
 
-  hand = model.getObjectByName("DEF-handR");
+  hand = model.getObjectByName("hand_r");
   rifle = await loadPistol();
   rifle.visible = false;
   if (hand) hand.add(rifle);
@@ -200,7 +204,7 @@ async function boot() {
   const box = new THREE.Box3().setFromObject(model);
   const size = box.getSize(new THREE.Vector3());
   if (size.y > 2.3 || size.y < 1.4) model.scale.setScalar(1.8 / size.y);
-  const hips = model.getObjectByName("DEF-hips");
+  const hips = model.getObjectByName("pelvis");
   hips.getWorldPosition(footProbe);
   model.position.x -= footProbe.x - player.position.x;
   model.position.z -= footProbe.z - player.position.z;
@@ -209,7 +213,6 @@ async function boot() {
   model.position.y -= grounded.min.y;
   model.updateMatrixWorld(true);
   soleY = lowerFootY();
-  cacheLimbs();
   bindInput();
   paintHud();
   cameraFollow(0.016, false);
@@ -465,7 +468,7 @@ function seatInHand(obj, pose) {
   const handPos = new THREE.Vector3();
   const forearmPos = new THREE.Vector3();
   hand.getWorldPosition(handPos);
-  model.getObjectByName("DEF-forearmR").getWorldPosition(forearmPos);
+  model.getObjectByName("lowerarm_r").getWorldPosition(forearmPos);
   const barrel = handPos.clone().sub(forearmPos).normalize();
   const down = new THREE.Vector3(0, -1, 0);
   const grip = down.clone().addScaledVector(barrel, -down.dot(barrel)).normalize();
@@ -898,7 +901,6 @@ function tick() {
   if (!motion) applyAimLook();
   if (player.position.y < 0.2 && !motion) plantFeet(dt);
   player.updateMatrixWorld(true);
-  poseLimbs();
   cameraFollow(dt, moving);
   if (rifle) rifle.updateMatrixWorld(true);
   if (mouse.fire && !busy) {
@@ -918,7 +920,7 @@ function chooseClip(moving, crouch, sprint, speed) {
   let names = ["idle"];
   let label = "待機";
   if (motion && (motion.kind === "climb" || motion.kind === "vault")) {
-    names = ["idle"];
+    names = ["climb"];
     label = motion.kind === "climb" ? (motion.dir > 0 ? "爬梯" : "下梯") : "翻越";
   } else if (knifeMode && !reloading) {
     let lower = "idleLower";
@@ -926,7 +928,7 @@ function chooseClip(moving, crouch, sprint, speed) {
     else if (moving && sprint && !mouse.aim) lower = "runLower";
     else if (moving) lower = "walkLower";
     else if (mouse.aim) lower = "aimLower";
-    names = [lower, mouse.aim || slashing ? "aimUpper" : "idleUpper"];
+    names = [lower, slashing ? "slashUpper" : "swordUpper"];
     if (slashing) label = "揮刀";
     else if (mouse.aim) label = "持刀瞄準";
     else label = moving ? (crouch ? "蹲走持刀" : "持刀") : "持刀";
@@ -986,7 +988,7 @@ function chooseClip(moving, crouch, sprint, speed) {
 }
 
 function cameraFollow(dt, moving) {
-  const head = model && model.getObjectByName("DEF-head");
+  const head = model && model.getObjectByName("Head");
   let rawEye = 1.62;
   if (head) {
     head.getWorldPosition(headWorld);
@@ -1136,7 +1138,7 @@ function playGun() {
 
 function lowerFootY() {
   let low = Infinity;
-  for (const name of ["DEF-footL", "DEF-footR"]) {
+  for (const name of ["foot_l", "foot_r"]) {
     const bone = model.getObjectByName(name);
     if (!bone) continue;
     bone.getWorldPosition(footProbe);
@@ -1162,7 +1164,7 @@ function finishReload() {
 
 function applyAimLook() {
   if (!mouse.aim && performance.now() >= shotUntil) return;
-  const chest = model.getObjectByName("DEF-spine003");
+  const chest = model.getObjectByName("spine_03");
   const track = chestTrack(actions.aimUpper);
   if (!chest || !track) return;
   sampleTrackQuat(track, 0, chest.quaternion);
@@ -1180,7 +1182,7 @@ function chestTrack(action) {
   if (!spineQuatTrack.has(clip)) {
     spineQuatTrack.set(
       clip,
-      clip.tracks.find((track) => track.name === "DEF-spine003.quaternion") || null
+      clip.tracks.find((track) => track.name === "spine_03.quaternion") || null
     );
   }
   return spineQuatTrack.get(clip);
@@ -1220,8 +1222,12 @@ function toggleKnife() {
 
 function trySlash() {
   if (cool > 0 || performance.now() < busyUntil) return;
-  cool = 0.45;
-  slashUntil = performance.now() + 460;
+  cool = 0.48;
+  const slash = actions.slashUpper;
+  slash.reset().play();
+  slash.setEffectiveWeight(1);
+  playing.add("slashUpper");
+  slashUntil = performance.now() + slash.getClip().duration * 1000;
   if (slashMark) {
     slashMark.position.copy(player.position).addScaledVector(forward, 0.85);
     slashMark.position.y += 1.15;
@@ -1406,7 +1412,7 @@ function vaultAhead() {
     from: player.position.clone(),
     to: dest,
     t: 0,
-    dur: 0.64,
+    dur: 0.67,
     arc: 0.58,
     u: 0,
     hold,
@@ -1459,145 +1465,6 @@ function doPrompt() {
   if (performance.now() < busyUntil || motion) return;
   if (!pendingAct) pendingAct = currentAction();
   if (pendingAct) pendingAct.run();
-}
-
-const vDir = new THREE.Vector3();
-const vUp = new THREE.Vector3();
-const vSide = new THREE.Vector3();
-const vSho = new THREE.Vector3();
-const vAim = new THREE.Vector3();
-const vBend = new THREE.Vector3();
-const vElbow = new THREE.Vector3();
-const vTmp = new THREE.Vector3();
-const qWorld = new THREE.Quaternion();
-const qParent = new THREE.Quaternion();
-const mBasis = new THREE.Matrix4();
-let limbs = null;
-let limbLen = null;
-
-function cacheLimbs() {
-  const bone = (name) => model.getObjectByName(name);
-  limbs = {
-    upperR: bone("DEF-upper_armR"),
-    foreR: bone("DEF-forearmR"),
-    handR: bone("DEF-handR"),
-    upperL: bone("DEF-upper_armL"),
-    foreL: bone("DEF-forearmL"),
-    handL: bone("DEF-handL"),
-    thighR: bone("DEF-thighR"),
-    shinR: bone("DEF-shinR"),
-    thighL: bone("DEF-thighL"),
-    shinL: bone("DEF-shinL"),
-  };
-  const dist = (a, b) => a.getWorldPosition(vSho).distanceTo(b.getWorldPosition(vTmp));
-  const foot = bone("DEF-footR");
-  limbLen = {
-    upper: dist(limbs.upperR, limbs.foreR),
-    fore: dist(limbs.foreR, limbs.handR),
-    thigh: dist(limbs.thighR, limbs.shinR),
-    shin: foot ? dist(limbs.shinR, foot) : 0.42,
-  };
-}
-
-function modelPt(x, y, z) {
-  return vTmp.set(x, y, z).applyMatrix4(model.matrixWorld).clone();
-}
-
-function modelDir(x, y, z) {
-  return vTmp.set(x, y, z).transformDirection(model.matrixWorld).clone();
-}
-
-function swingBone(bone, worldDir) {
-  if (!bone) return;
-  bone.updateMatrixWorld(true);
-  vUp.set(0, 1, 0).transformDirection(bone.matrixWorld);
-  vDir.copy(worldDir);
-  if (vDir.lengthSq() < 1e-8) return;
-  vDir.normalize();
-  if (vUp.dot(vDir) > 0.9995) return;
-  qWorld.setFromUnitVectors(vUp, vDir);
-  bone.getWorldQuaternion(qParent);
-  qParent.premultiply(qWorld);
-  bone.parent.getWorldQuaternion(qWorld);
-  bone.quaternion.copy(qWorld.invert()).multiply(qParent);
-  bone.updateMatrixWorld(true);
-}
-
-function ik2(upper, fore, target, pole, aLen, bLen) {
-  if (!upper || !fore) return;
-  upper.getWorldPosition(vSho);
-  vAim.copy(target).sub(vSho);
-  const dist = THREE.MathUtils.clamp(vAim.length(), 0.05, aLen + bLen - 0.02);
-  vAim.multiplyScalar(1 / vAim.length());
-  const cosA = THREE.MathUtils.clamp((aLen * aLen + dist * dist - bLen * bLen) / (2 * aLen * dist), -1, 1);
-  const sinA = Math.sqrt(Math.max(0, 1 - cosA * cosA));
-  vBend.copy(pole).sub(vSho);
-  vBend.addScaledVector(vAim, -vBend.dot(vAim));
-  if (vBend.lengthSq() < 1e-6) vBend.set(0, 1, 0);
-  vBend.normalize();
-  vElbow.copy(vSho).addScaledVector(vAim, aLen * cosA).addScaledVector(vBend, aLen * sinA);
-  vTmp.copy(vElbow).sub(vSho);
-  swingBone(upper, vTmp);
-  fore.getWorldPosition(vSho);
-  vTmp.copy(target).sub(vSho);
-  swingBone(fore, vTmp);
-}
-
-function poseLimbs() {
-  if (!limbs || !limbLen) return;
-  const drop = keys.has("KeyC") ? 0.4 : 0;
-  if (motion && motion.kind === "climb") poseClimb(drop);
-  else if (motion && motion.kind === "vault") poseVault();
-  else if (knifeMode) poseKnife(drop);
-  if (blade) blade.visible = knifeMode;
-}
-
-function poseClimb() {
-  const u = motion.u || 0;
-  const lift = Math.sin(Math.PI * Math.min(u, 1));
-  const rightLeads = motion.step % 2 === 0;
-  const handRy = 1.12 + (rightLeads ? 0.08 + lift * 0.36 : 0);
-  const handLy = 1.12 + (!rightLeads ? 0.08 + lift * 0.36 : 0);
-  const footRy = rightLeads ? 0.08 : 0.1 + lift * 0.42;
-  const footLy = rightLeads ? 0.1 + lift * 0.42 : 0.08;
-  const footRz = 0.16 + (rightLeads ? 0 : lift * 0.12);
-  const footLz = 0.16 + (rightLeads ? lift * 0.12 : 0);
-  ik2(limbs.upperR, limbs.foreR, modelPt(-0.18, handRy, 0.38), modelPt(-0.48, 1.2, 0.02), limbLen.upper, limbLen.fore);
-  ik2(limbs.upperL, limbs.foreL, modelPt(0.18, handLy, 0.38), modelPt(0.48, 1.2, 0.02), limbLen.upper, limbLen.fore);
-  swingBone(limbs.handR, modelDir(0, 0.1, 1));
-  swingBone(limbs.handL, modelDir(0, 0.1, 1));
-  ik2(limbs.thighR, limbs.shinR, modelPt(-0.1, footRy, footRz), modelPt(-0.16, 0.55, 0.28), limbLen.thigh, limbLen.shin);
-  ik2(limbs.thighL, limbs.shinL, modelPt(0.1, footLy, footLz), modelPt(0.16, 0.55, 0.28), limbLen.thigh, limbLen.shin);
-}
-
-function poseVault() {
-  const u = motion.u || 0;
-  const tuck = Math.sin(Math.PI * Math.min(u, 1));
-  const hold = motion.hold;
-  if (hold) {
-    ik2(limbs.upperR, limbs.foreR, hold.clone().add(new THREE.Vector3(-0.12, 0.02, 0)), hold.clone().add(new THREE.Vector3(-0.3, -0.2, 0)), limbLen.upper, limbLen.fore);
-    ik2(limbs.upperL, limbs.foreL, hold.clone().add(new THREE.Vector3(0.12, 0.02, 0)), hold.clone().add(new THREE.Vector3(0.3, -0.2, 0)), limbLen.upper, limbLen.fore);
-  }
-  const footY = 0.08 + tuck * 0.5;
-  const footZ = 0.12 + tuck * 0.28;
-  ik2(limbs.thighR, limbs.shinR, modelPt(-0.1, footY, footZ), modelPt(-0.2, 0.7, 0.2), limbLen.thigh, limbLen.shin);
-  ik2(limbs.thighL, limbs.shinL, modelPt(0.1, footY, footZ), modelPt(0.2, 0.7, 0.2), limbLen.thigh, limbLen.shin);
-}
-
-function poseKnife(drop) {
-  const slashing = performance.now() < slashUntil;
-  if (slashing) {
-    const u = 1 - (slashUntil - performance.now()) / 460;
-    const a = THREE.MathUtils.lerp(-1.05, 1.05, THREE.MathUtils.clamp(u, 0, 1));
-    const hand = modelPt(Math.sin(a) * 0.38, 1.28 - drop, Math.cos(a) * 0.26 + 0.16);
-    ik2(limbs.upperR, limbs.foreR, hand, modelPt(-0.42, 1.18 - drop, 0.02), limbLen.upper, limbLen.fore);
-    swingBone(limbs.handR, modelDir(Math.cos(a) * 0.2, 0.15, 1));
-  } else if (mouse.aim) {
-    ik2(limbs.upperR, limbs.foreR, modelPt(-0.1, 1.46 - drop, 0.28), modelPt(-0.46, 1.28 - drop, -0.02), limbLen.upper, limbLen.fore);
-    swingBone(limbs.handR, modelDir(0, 0.2, 1));
-  } else {
-    ik2(limbs.upperR, limbs.foreR, modelPt(-0.22, 1.02 - drop, 0.16), modelPt(-0.46, 1.08 - drop, -0.08), limbLen.upper, limbLen.fore);
-  }
 }
 
 function dampAngle(cur, target, lambda, dt) {
