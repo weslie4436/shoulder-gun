@@ -190,6 +190,8 @@ async function boot() {
   blade = makeKnife();
   if (hand) hand.add(blade);
   else player.add(blade);
+  blade.position.set(0, 0.05, -0.03);
+  blade.rotation.y = Math.PI / 2;
   blade.visible = false;
   actions.idle.reset().setEffectiveWeight(1).play();
   playing.add("idle");
@@ -516,24 +518,8 @@ function seatPistol() {
     actions[name].stop();
     playing.delete(name);
   }
-  actions.aim.reset().setEffectiveWeight(1).play();
-  mixer.update(0.4);
-  model.updateMatrixWorld(true);
-
-  const handPos = new THREE.Vector3();
-  const forearmPos = new THREE.Vector3();
-  hand.getWorldPosition(handPos);
-  model.getObjectByName("DEF-forearmR").getWorldPosition(forearmPos);
-  const barrel = handPos.clone().sub(forearmPos).normalize();
-  const down = new THREE.Vector3(0, -1, 0);
-  const grip = down.clone().addScaledVector(barrel, -down.dot(barrel)).normalize();
-  const side = new THREE.Vector3().crossVectors(barrel, grip).normalize();
-  const basis = new THREE.Matrix4().makeBasis(side, barrel, grip);
-  const worldQ = new THREE.Quaternion().setFromRotationMatrix(basis);
-  const parentQ = hand.getWorldQuaternion(new THREE.Quaternion());
-  rifle.quaternion.copy(parentQ.invert()).multiply(worldQ);
-  const seat = handPos.clone().addScaledVector(barrel, 0.025).addScaledVector(grip, -0.006);
-  rifle.position.copy(hand.worldToLocal(seat));
+  rifle.position.set(0, 0.045, -0.028);
+  rifle.quaternion.set(1, 0, 0, 0);
 
   actions.aim.stop();
   actions.idle.reset().setEffectiveWeight(1).play();
@@ -892,11 +878,7 @@ function tick() {
   const aimingNow = mouse.aim || performance.now() < shotUntil;
   const faceDir = moving && !aimingNow ? move : forward;
   const targetYaw = Math.atan2(faceDir.x, faceDir.z);
-  if (motion && motion.face != null) {
-    if (motion.yaw != null) yaw = motion.yaw;
-    player.rotation.y = motion.face;
-    aimTwist = 0;
-  } else if (aimingNow) {
+  if (aimingNow) {
     player.rotation.y = dampAngle(player.rotation.y, targetYaw, moving ? 5 : 16, dt);
     aimTwist = Math.atan2(Math.sin(targetYaw - player.rotation.y), Math.cos(targetYaw - player.rotation.y));
     aimTwist = THREE.MathUtils.clamp(aimTwist, -1.05, 1.05);
@@ -918,7 +900,6 @@ function tick() {
   player.updateMatrixWorld(true);
   poseLimbs();
   cameraFollow(dt, moving);
-  placeGun();
   if (rifle) rifle.updateMatrixWorld(true);
   if (mouse.fire && !busy) {
     if (knifeMode) trySlash();
@@ -1343,8 +1324,6 @@ function stepClimb(dt) {
         dur: 0.5,
         arc: 0.18,
         u: 0,
-        face: Math.PI,
-        yaw: 0,
         hold: new THREE.Vector3(ladderAnchor.x, LOFT_Y + 0.05, 5.02),
       };
       return;
@@ -1375,7 +1354,7 @@ function stepLadder(dt) {
 function beginClimb(dir) {
   const steps = 6;
   yaw = 0;
-  player.rotation.y = Math.PI;
+  player.rotation.y = Math.atan2(0, -1);
   player.position.x = ladderAnchor.x;
   player.position.z = ladderAnchor.z + 0.5;
   if (dir < 0) player.position.y = LOFT_Y;
@@ -1391,8 +1370,6 @@ function beginClimb(dir) {
     holdZ: ladderAnchor.z + 0.5,
     fromY: player.position.y,
     toY: dir > 0 ? span : LOFT_Y - span,
-    face: Math.PI,
-    yaw: 0,
   };
   busyUntil = performance.now() + (steps * 0.4 + 0.7) * 1000;
 }
@@ -1530,18 +1507,19 @@ function modelDir(x, y, z) {
   return vTmp.set(x, y, z).transformDirection(model.matrixWorld).clone();
 }
 
-function alignBone(bone, worldDir, worldUp) {
+function swingBone(bone, worldDir) {
   if (!bone) return;
-  vDir.copy(worldDir).normalize();
-  vUp.copy(worldUp);
-  vUp.addScaledVector(vDir, -vUp.dot(vDir));
-  if (vUp.lengthSq() < 1e-6) vUp.set(0, 0, 1);
-  vUp.normalize();
-  vSide.crossVectors(vDir, vUp).normalize();
-  mBasis.makeBasis(vSide, vDir, vUp);
-  qWorld.setFromRotationMatrix(mBasis);
-  bone.parent.getWorldQuaternion(qParent);
-  bone.quaternion.copy(qParent.invert()).multiply(qWorld);
+  bone.updateMatrixWorld(true);
+  vUp.set(0, 1, 0).transformDirection(bone.matrixWorld);
+  vDir.copy(worldDir);
+  if (vDir.lengthSq() < 1e-8) return;
+  vDir.normalize();
+  if (vUp.dot(vDir) > 0.9995) return;
+  qWorld.setFromUnitVectors(vUp, vDir);
+  bone.getWorldQuaternion(qParent);
+  qParent.premultiply(qWorld);
+  bone.parent.getWorldQuaternion(qWorld);
+  bone.quaternion.copy(qWorld.invert()).multiply(qParent);
   bone.updateMatrixWorld(true);
 }
 
@@ -1558,10 +1536,11 @@ function ik2(upper, fore, target, pole, aLen, bLen) {
   if (vBend.lengthSq() < 1e-6) vBend.set(0, 1, 0);
   vBend.normalize();
   vElbow.copy(vSho).addScaledVector(vAim, aLen * cosA).addScaledVector(vBend, aLen * sinA);
-  const bend = vBend.clone();
-  alignBone(upper, vElbow.clone().sub(vSho), bend);
+  vTmp.copy(vElbow).sub(vSho);
+  swingBone(upper, vTmp);
   fore.getWorldPosition(vSho);
-  alignBone(fore, target.clone().sub(vSho), bend);
+  vTmp.copy(target).sub(vSho);
+  swingBone(fore, vTmp);
 }
 
 function poseLimbs() {
@@ -1585,8 +1564,8 @@ function poseClimb() {
   const footLz = 0.16 + (rightLeads ? lift * 0.12 : 0);
   ik2(limbs.upperR, limbs.foreR, modelPt(-0.18, handRy, 0.38), modelPt(-0.48, 1.2, 0.02), limbLen.upper, limbLen.fore);
   ik2(limbs.upperL, limbs.foreL, modelPt(0.18, handLy, 0.38), modelPt(0.48, 1.2, 0.02), limbLen.upper, limbLen.fore);
-  alignBone(limbs.handR, modelDir(0, 0.15, 1), modelDir(0, 1, 0));
-  alignBone(limbs.handL, modelDir(0, 0.15, 1), modelDir(0, 1, 0));
+  swingBone(limbs.handR, modelDir(0, 0.1, 1));
+  swingBone(limbs.handL, modelDir(0, 0.1, 1));
   ik2(limbs.thighR, limbs.shinR, modelPt(-0.1, footRy, footRz), modelPt(-0.16, 0.55, 0.28), limbLen.thigh, limbLen.shin);
   ik2(limbs.thighL, limbs.shinL, modelPt(0.1, footLy, footLz), modelPt(0.16, 0.55, 0.28), limbLen.thigh, limbLen.shin);
 }
@@ -1598,8 +1577,6 @@ function poseVault() {
   if (hold) {
     ik2(limbs.upperR, limbs.foreR, hold.clone().add(new THREE.Vector3(-0.12, 0.02, 0)), hold.clone().add(new THREE.Vector3(-0.3, -0.2, 0)), limbLen.upper, limbLen.fore);
     ik2(limbs.upperL, limbs.foreL, hold.clone().add(new THREE.Vector3(0.12, 0.02, 0)), hold.clone().add(new THREE.Vector3(0.3, -0.2, 0)), limbLen.upper, limbLen.fore);
-    alignBone(limbs.handR, modelDir(0, -0.2, 1), modelDir(0, 1, 0));
-    alignBone(limbs.handL, modelDir(0, -0.2, 1), modelDir(0, 1, 0));
   }
   const footY = 0.08 + tuck * 0.5;
   const footZ = 0.12 + tuck * 0.28;
@@ -1614,38 +1591,13 @@ function poseKnife(drop) {
     const a = THREE.MathUtils.lerp(-1.05, 1.05, THREE.MathUtils.clamp(u, 0, 1));
     const hand = modelPt(Math.sin(a) * 0.38, 1.28 - drop, Math.cos(a) * 0.26 + 0.16);
     ik2(limbs.upperR, limbs.foreR, hand, modelPt(-0.42, 1.18 - drop, 0.02), limbLen.upper, limbLen.fore);
-    alignBone(limbs.handR, modelDir(Math.cos(a), 0.45, -Math.sin(a) * 0.35), modelDir(-0.2, 1, 0));
+    swingBone(limbs.handR, modelDir(Math.cos(a) * 0.2, 0.15, 1));
   } else if (mouse.aim) {
     ik2(limbs.upperR, limbs.foreR, modelPt(-0.1, 1.46 - drop, 0.28), modelPt(-0.46, 1.28 - drop, -0.02), limbLen.upper, limbLen.fore);
-    alignBone(limbs.handR, modelDir(0.08, 1, 0.42), modelDir(-1, 0.05, 0.1));
-    ik2(limbs.upperL, limbs.foreL, modelPt(0.06, 1.24 - drop, 0.22), modelPt(0.4, 1.18 - drop, 0.02), limbLen.upper, limbLen.fore);
-    alignBone(limbs.handL, modelDir(0, -0.15, 1), modelDir(1, 0.3, 0));
+    swingBone(limbs.handR, modelDir(0, 0.2, 1));
   } else {
     ik2(limbs.upperR, limbs.foreR, modelPt(-0.22, 1.02 - drop, 0.16), modelPt(-0.46, 1.08 - drop, -0.08), limbLen.upper, limbLen.fore);
-    alignBone(limbs.handR, modelDir(-0.1, -0.45, 0.85), modelDir(-1, 0.1, 0));
   }
-  if (!blade) return;
-  blade.position.set(0, 0.04, -0.045);
-  blade.quaternion.identity();
-}
-
-function placeGun() {
-  if (!rifle || !rifle.visible || !hand) return;
-  camera.getWorldDirection(vDir);
-  if (vDir.lengthSq() < 1e-6) return;
-  vDir.normalize();
-  vUp.set(0, 1, 0);
-  vSide.crossVectors(vDir, vUp);
-  if (vSide.lengthSq() < 1e-6) vSide.set(1, 0, 0);
-  vSide.normalize();
-  vUp.crossVectors(vDir, vSide).normalize();
-  mBasis.makeBasis(vSide, vDir, vUp);
-  qWorld.setFromRotationMatrix(mBasis);
-  hand.getWorldQuaternion(qParent);
-  rifle.quaternion.copy(qParent.invert()).multiply(qWorld);
-  hand.getWorldPosition(vSho);
-  vSho.addScaledVector(vDir, -0.035).addScaledVector(vUp, 0.02);
-  rifle.position.copy(hand.worldToLocal(vSho));
 }
 
 function dampAngle(cur, target, lambda, dt) {
